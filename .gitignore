@@ -4,3 +4,5 @@ uploads/
 *.db
 *.log
 .DS_Store
+.claude/
+anits_ims/
