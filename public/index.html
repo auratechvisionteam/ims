@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure Management System - ANITS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .status-new {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .status-in-progress {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        .status-resolved {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            color: white;
+            z-index: 2000;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .toast-success {
+            background-color: #10b981;
+        }
+        .toast-error {
+            background-color: #ef4444;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Loading Spinner -->
+    <div id="loading" class="hidden fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Navigation Bar (Hidden initially) -->
+    <nav id="navbar" class="hidden bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl font-bold">Infrastructure Management System</h1>
+                <div class="flex items-center space-x-4">
+                    <span id="user-name" class="text-sm"></span>
+                    <span id="user-role" class="text-sm bg-blue-700 px-3 py-1 rounded"></span>
+                    <button id="logout-btn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded transition">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <div id="app-container" class="container mx-auto px-4 py-8">
+
+        <!-- Landing Page -->
+        <div id="landing-view" class="max-w-4xl mx-auto text-center">
+            <div class="bg-white rounded-lg shadow-xl p-12">
+                <h1 class="text-5xl font-bold text-blue-600 mb-4">Infrastructure Management System</h1>
+                <p class="text-xl text-gray-600 mb-2">Anil Neerukonda Institute of Technology & Sciences</p>
+                <p class="text-lg text-gray-500 mb-8">Efficient complaint management for campus infrastructure</p>
+                <button id="get-started-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-lg text-xl transition">
+                    Get Started
+                </button>
+            </div>
+        </div>
+
+        <!-- Role Selection -->
+        <div id="role-selection-view" class="hidden max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-center text-gray-800 mb-8">Select Your Role</h2>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-lg shadow-lg p-8 text-center hover:shadow-xl transition cursor-pointer role-card" data-role="Faculty">
+                    <div class="text-6xl mb-4">👨‍🏫</div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Faculty</h3>
+                    <p class="text-gray-600">Submit and track infrastructure complaints</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-8 text-center hover:shadow-xl transition cursor-pointer role-card" data-role="Maintenance">
+                    <div class="text-6xl mb-4">🔧</div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Maintenance</h3>
+                    <p class="text-gray-600">View and resolve assigned complaints</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-8 text-center hover:shadow-xl transition cursor-pointer role-card" data-role="Admin">
+                    <div class="text-6xl mb-4">👔</div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Admin</h3>
+                    <p class="text-gray-600">Monitor all complaints and analytics</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login View -->
+        <div id="login-view" class="hidden max-w-md mx-auto">
+            <div class="bg-white rounded-lg shadow-xl p-8">
+                <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">Login</h2>
+                <form id="login-form">
+                    <input type="hidden" id="login-role" name="role">
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 mb-2">Email</label>
+                        <input type="email" id="login-email" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 mb-2">Password</label>
+                        <input type="password" id="login-password" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+
+                    <div id="maintenance-dept-field" class="mb-4 hidden">
+                        <label class="block text-gray-700 mb-2">Department</label>
+                        <select id="login-department" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Select Department</option>
+                            <option value="Electrical">Electrical</option>
+                            <option value="IT & Network">IT & Network</option>
+                            <option value="Carpentry">Carpentry</option>
+                            <option value="Sanitary & Plumbing">Sanitary & Plumbing</option>
+                            <option value="Housekeeping">Housekeeping</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition">
+                        Login
+                    </button>
+
+                    <button type="button" id="back-to-role-btn" class="w-full mt-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg transition">
+                        Back
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Faculty Dashboard -->
+        <div id="faculty-dashboard" class="hidden">
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <!-- Submit Complaint Form -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Submit Complaint</h2>
+                    <form id="complaint-form">
+                        <div class="mb-4">
+                            <label class="block text-gray-700 mb-2">Description *</label>
+                            <textarea id="complaint-description" rows="4" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-3 mb-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2">Block</label>
+                                <select id="complaint-block" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Select</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                    <option value="E">E</option>
+                                    <option value="F">F</option>
+                                    <option value="G">G</option>
+                                    <option value="H">H</option>
+                                    <option value="I">I</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">Floor</label>
+                                <select id="complaint-floor" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Select</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">Room</label>
+                                <input type="text" id="complaint-room" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="block text-gray-700 mb-2">Assign To *</label>
+                            <select id="complaint-assigned-to" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                <option value="">Select Department</option>
+                                <option value="Electrical">Electrical</option>
+                                <option value="IT & Network">IT & Network</option>
+                                <option value="Carpentry">Carpentry</option>
+                                <option value="Sanitary & Plumbing">Sanitary & Plumbing</option>
+                                <option value="Housekeeping">Housekeeping</option>
+                                <option value="Maintenance">Maintenance</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="block text-gray-700 mb-2">Photo (Optional, max 5MB)</label>
+                            <input type="file" id="complaint-photo" accept="image/jpeg,image/png,image/gif" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition">
+                            Submit Complaint
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">My Complaints Summary</h2>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                            <span class="text-gray-700 font-medium">Total Complaints</span>
+                            <span id="faculty-total" class="text-2xl font-bold text-blue-600">0</span>
+                        </div>
+                        <div class="flex justify-between items-center p-4 bg-red-50 rounded-lg">
+                            <span class="text-gray-700 font-medium">New</span>
+                            <span id="faculty-new" class="text-2xl font-bold text-red-600">0</span>
+                        </div>
+                        <div class="flex justify-between items-center p-4 bg-yellow-50 rounded-lg">
+                            <span class="text-gray-700 font-medium">In Progress</span>
+                            <span id="faculty-in-progress" class="text-2xl font-bold text-yellow-600">0</span>
+                        </div>
+                        <div class="flex justify-between items-center p-4 bg-green-50 rounded-lg">
+                            <span class="text-gray-700 font-medium">Resolved</span>
+                            <span id="faculty-resolved" class="text-2xl font-bold text-green-600">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Complaints List -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">My Complaints</h2>
+                    <div class="flex space-x-2">
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-blue-600 text-white" data-status="All">All</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="New">New</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="In Progress">In Progress</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="Resolved">Resolved</button>
+                    </div>
+                </div>
+                <div id="faculty-complaints-list" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- Maintenance Dashboard -->
+        <div id="maintenance-dashboard" class="hidden">
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">Assigned Complaints</h2>
+                    <div class="flex space-x-2">
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-blue-600 text-white" data-status="All">All</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="New">New</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="In Progress">In Progress</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="Resolved">Resolved</button>
+                    </div>
+                </div>
+                <div id="maintenance-complaints-list" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div id="admin-dashboard" class="hidden">
+            <!-- Stats Cards -->
+            <div class="grid md:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-gray-600 text-sm font-medium mb-2">Total Complaints</h3>
+                    <p id="admin-total" class="text-4xl font-bold text-blue-600">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-gray-600 text-sm font-medium mb-2">Open</h3>
+                    <p id="admin-open" class="text-4xl font-bold text-red-600">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-gray-600 text-sm font-medium mb-2">Resolved</h3>
+                    <p id="admin-resolved" class="text-4xl font-bold text-green-600">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-gray-600 text-sm font-medium mb-2">Avg Resolution Time</h3>
+                    <p id="admin-avg-time" class="text-4xl font-bold text-purple-600">0h</p>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Complaints by Status</h3>
+                    <canvas id="status-chart"></canvas>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Complaints by Department</h3>
+                    <canvas id="department-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div class="flex space-x-4 mb-4 border-b">
+                    <button class="admin-tab px-4 py-2 border-b-2 border-blue-600 text-blue-600 font-medium" data-tab="all-complaints">All Complaints</button>
+                    <button class="admin-tab px-4 py-2 text-gray-600 hover:text-blue-600" data-tab="by-faculty">By Faculty Department</button>
+                    <button class="admin-tab px-4 py-2 text-gray-600 hover:text-blue-600" data-tab="recent-activity">Recent Activity</button>
+                    <button class="admin-tab px-4 py-2 text-gray-600 hover:text-blue-600" data-tab="user-management" id="user-mgmt-tab">User Management</button>
+                </div>
+
+                <div id="all-complaints-tab" class="admin-tab-content">
+                    <div class="flex space-x-2 mb-4">
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-blue-600 text-white" data-status="All">All</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="New">New</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="In Progress">In Progress</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700" data-status="Resolved">Resolved</button>
+                    </div>
+                    <div id="admin-complaints-list" class="space-y-4"></div>
+                </div>
+
+                <div id="by-faculty-tab" class="admin-tab-content hidden">
+                    <div id="faculty-dept-list"></div>
+                </div>
+
+                <div id="recent-activity-tab" class="admin-tab-content hidden">
+                    <div id="recent-activity-list"></div>
+                </div>
+
+                <div id="user-management-tab" class="admin-tab-content hidden">
+                    <!-- Create User Form -->
+                    <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">Create New User</h3>
+                        <form id="create-user-form" class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2">Email *</label>
+                                <input type="email" id="new-user-email" class="w-full px-4 py-2 border rounded-lg" required>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">Name *</label>
+                                <input type="text" id="new-user-name" class="w-full px-4 py-2 border rounded-lg" required>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">Password *</label>
+                                <input type="password" id="new-user-password" class="w-full px-4 py-2 border rounded-lg" required>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">Role *</label>
+                                <select id="new-user-role" class="w-full px-4 py-2 border rounded-lg" required>
+                                    <option value="">Select Role</option>
+                                    <option value="Faculty">Faculty</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="SuperAdmin">SuperAdmin</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">Department</label>
+                                <select id="new-user-department" class="w-full px-4 py-2 border rounded-lg">
+                                    <option value="">Select Department</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg">
+                                    Create User
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Users List -->
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">All Users</h3>
+                    <div id="users-list"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Complaint Detail Modal -->
+    <div id="complaint-modal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <h2 id="modal-title" class="text-2xl font-bold text-gray-800"></h2>
+                    <button id="close-modal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+
+                <div id="modal-content"></div>
+
+                <!-- Update Form (for Maintenance staff) -->
+                <div id="update-form-container" class="hidden mt-6 pt-6 border-t">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Update Complaint</h3>
+                    <form id="update-complaint-form">
+                        <div class="mb-4">
+                            <label class="block text-gray-700 mb-2">Status</label>
+                            <select id="update-status" class="w-full px-4 py-2 border rounded-lg">
+                                <option value="New">New</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Resolved">Resolved</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-700 mb-2">Resolution Notes</label>
+                            <textarea id="update-notes" rows="3" class="w-full px-4 py-2 border rounded-lg"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg">
+                            Update Complaint
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
